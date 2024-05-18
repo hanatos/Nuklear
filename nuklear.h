@@ -3116,7 +3116,7 @@ enum nk_widget_states {
     NK_WIDGET_STATE_INACTIVE    = NK_FLAG(2), /* widget is neither active nor hovered */
     NK_WIDGET_STATE_ENTERED     = NK_FLAG(3), /* widget has been hovered on the current frame */
     NK_WIDGET_STATE_HOVER       = NK_FLAG(4), /* widget is being hovered */
-    NK_WIDGET_STATE_ACTIVED     = NK_FLAG(5),/* widget is currently activated */
+    NK_WIDGET_STATE_ACTIVED     = NK_FLAG(5), /* widget is currently activated */
     NK_WIDGET_STATE_LEFT        = NK_FLAG(6), /* widget is from this frame on not hovered anymore */
     NK_WIDGET_STATE_HOVERED     = NK_WIDGET_STATE_HOVER|NK_WIDGET_STATE_MODIFIED, /* widget is being hovered */
     NK_WIDGET_STATE_ACTIVE      = NK_WIDGET_STATE_ACTIVED|NK_WIDGET_STATE_MODIFIED /* widget is currently activated */
@@ -7672,15 +7672,27 @@ nk_text_clamp(const struct nk_user_font *font, const char *text,
         width = s;
         glyph_len = nk_utf_decode(&text[len], &unicode, text_len - len);
         g++;
+        if(unicode == '\n')
+        {
+          len += glyph_len;
+          sep_width = last_width = width;
+          sep_g = g;
+          sep_len = len;
+          *glyphs = sep_g;
+          *text_width = sep_width;
+          assert(sep_len > 0);
+          return sep_len-1; // - 1 because the last one is the separator
+        }
     }
     if (len >= text_len) {
         *glyphs = g;
         *text_width = last_width;
-        return len;
+        return len; // last one is good character
     } else {
         *glyphs = sep_g;
         *text_width = sep_width;
-        return (!sep_len) ? len: sep_len;
+          assert(sep_len > 0 || len > 0);
+        return ((!sep_len) ? len: sep_len) - 1; // last one is separator
     }
 }
 NK_LIB struct nk_vec2
@@ -23690,7 +23702,7 @@ nk_widget_text_wrap(struct nk_command_buffer *o, struct nk_rect b,
     int done = 0;
     struct nk_rect line;
     struct nk_text text;
-    NK_INTERN nk_rune seperator[] = {' '};
+    NK_INTERN nk_rune seperator[] = {' ', '\n'};
 
     NK_ASSERT(o);
     NK_ASSERT(t);
@@ -23713,7 +23725,7 @@ nk_widget_text_wrap(struct nk_command_buffer *o, struct nk_rect b,
     while (done < len) {
         if (!fitting || line.y + line.h >= (b.y + b.h)) break;
         nk_widget_text(o, line, &string[done], fitting, &text, NK_TEXT_LEFT, f);
-        done += fitting;
+        done += fitting + 1; // also skip separator, if any
         line.y += f->height + 2 * t->padding.y;
         fitting = nk_text_clamp(f, &string[done], len - done, line.w, &glyphs, &width, seperator,NK_LEN(seperator));
     }
@@ -30289,6 +30301,7 @@ nk_combo_separator(struct nk_context *ctx, const char *items_separated_by_separa
         iter = current_item;
         while (*iter && *iter != separator) iter++;
         length = (int)(iter - current_item);
+        if (length == 0) break;
         if (i == selected) break;
         current_item = iter + 1;
     }
@@ -30300,6 +30313,7 @@ nk_combo_separator(struct nk_context *ctx, const char *items_separated_by_separa
             iter = current_item;
             while (*iter && *iter != separator) iter++;
             length = (int)(iter - current_item);
+            if (length == 0) break;
             if (nk_combo_item_text(ctx, current_item, length, NK_TEXT_LEFT))
                 selected = i;
             current_item = current_item + length + 1;
@@ -30413,6 +30427,8 @@ nk_tooltip_begin(struct nk_context *ctx, float width)
     bounds.y = (float)y;
     bounds.w = (float)w;
     bounds.h = (float)h;
+    if ((win->layout->clip.x + bounds.x + bounds.w) > (win->bounds.x + win->bounds.w))
+        bounds.x = win->bounds.x + win->bounds.w - bounds.w - win->layout->clip.x;
 
     ret = nk_popup_begin(ctx, NK_POPUP_DYNAMIC,
         "__##Tooltip##__", NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_BORDER, bounds);
