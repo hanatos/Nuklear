@@ -1054,15 +1054,26 @@ nk_text_clamp(const struct nk_user_font *font, const char *text,
         width = s;
         glyph_len = nk_utf_decode(&text[len], &unicode, text_len - len);
         g++;
+        if(unicode == '\n')
+        {
+          len += glyph_len;
+          sep_width = last_width = width;
+          sep_g = g;
+          sep_len = len;
+          *glyphs = sep_g;
+          *text_width = sep_width;
+          assert(sep_len > 0);
+          return sep_len-1; // - 1 because the last one is the separator
+        }
     }
     if (len >= text_len) {
         *glyphs = g;
         *text_width = last_width;
-        return len;
+        return len; // last one is a good character
     } else {
         *glyphs = sep_g;
         *text_width = sep_width;
-        return (!sep_len) ? len: sep_len;
+        return ((!sep_len) ? len: sep_len) - 1; // last one is a separator
     }
 }
 NK_LIB struct nk_vec2
