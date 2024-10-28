@@ -602,7 +602,7 @@ NK_API void nk_input_begin(struct nk_context*);
 /// __x__       | Must hold an integer describing the current mouse cursor x-position
 /// __y__       | Must hold an integer describing the current mouse cursor y-position
 */
-NK_API void nk_input_motion(struct nk_context*, int x, int y);
+NK_API void nk_input_motion(struct nk_context*, float x, float y);
 /*/// #### nk_input_key
 /// Mirrors the state of a specific key to nuklear
 ///
