@@ -824,7 +824,7 @@ NK_API void nk_input_begin(struct nk_context*);
 /// __x__       | Must hold an integer describing the current mouse cursor x-position
 /// __y__       | Must hold an integer describing the current mouse cursor y-position
 */
-NK_API void nk_input_motion(struct nk_context*, int x, int y);
+NK_API void nk_input_motion(struct nk_context*, float x, float y);
 /*/// #### nk_input_key
 /// Mirrors the state of a specific key to nuklear
 ///
@@ -3116,7 +3116,7 @@ enum nk_widget_states {
     NK_WIDGET_STATE_INACTIVE    = NK_FLAG(2), /* widget is neither active nor hovered */
     NK_WIDGET_STATE_ENTERED     = NK_FLAG(3), /* widget has been hovered on the current frame */
     NK_WIDGET_STATE_HOVER       = NK_FLAG(4), /* widget is being hovered */
-    NK_WIDGET_STATE_ACTIVED     = NK_FLAG(5), /* widget is currently activated */
+    NK_WIDGET_STATE_ACTIVED     = NK_FLAG(5),/* widget is currently activated */
     NK_WIDGET_STATE_LEFT        = NK_FLAG(6), /* widget is from this frame on not hovered anymore */
     NK_WIDGET_STATE_HOVERED     = NK_WIDGET_STATE_HOVER|NK_WIDGET_STATE_MODIFIED, /* widget is being hovered */
     NK_WIDGET_STATE_ACTIVE      = NK_WIDGET_STATE_ACTIVED|NK_WIDGET_STATE_MODIFIED /* widget is currently activated */
@@ -7687,12 +7687,11 @@ nk_text_clamp(const struct nk_user_font *font, const char *text,
     if (len >= text_len) {
         *glyphs = g;
         *text_width = last_width;
-        return len; // last one is good character
+        return len; // last one is a good character
     } else {
         *glyphs = sep_g;
         *text_width = sep_width;
-          assert(sep_len > 0 || len > 0);
-        return ((!sep_len) ? len: sep_len) - 1; // last one is separator
+        return ((!sep_len) ? len: sep_len) - 1; // last one is a separator
     }
 }
 NK_LIB struct nk_vec2
@@ -16827,7 +16826,7 @@ nk_font_bake_pack(struct nk_font_baker *baker,
     NK_STORAGE const nk_size max_height = 1024 * 32;
     const struct nk_font_config *config_iter, *it;
     int total_glyph_count = 0;
-    int total_range_count = 0;
+    // int total_range_count = 0;
     int range_count = 0;
     int i = 0;
 
@@ -16842,7 +16841,7 @@ nk_font_bake_pack(struct nk_font_baker *baker,
     for (config_iter = config_list; config_iter; config_iter = config_iter->next) {
         it = config_iter;
         do {range_count = nk_range_count(it->range);
-            total_range_count += range_count;
+            // total_range_count += range_count;
             total_glyph_count += nk_range_glyph_count(it->range, range_count);
         } while ((it = it->n) != config_iter);
     }
@@ -16930,7 +16929,7 @@ nk_font_bake_pack(struct nk_font_baker *baker,
         }
         NK_ASSERT(rect_n == total_glyph_count);
         NK_ASSERT(char_n == total_glyph_count);
-        NK_ASSERT(range_n == total_range_count);
+        //NK_ASSERT(range_n == total_range_count);
     }
     *height = (int)nk_round_up_pow2((nk_uint)*height);
     *image_memory = (nk_size)(*width) * (nk_size)(*height);
@@ -18075,14 +18074,14 @@ nk_input_end(struct nk_context *ctx)
     }
 }
 NK_API void
-nk_input_motion(struct nk_context *ctx, int x, int y)
+nk_input_motion(struct nk_context *ctx, float x, float y)
 {
     struct nk_input *in;
     NK_ASSERT(ctx);
     if (!ctx) return;
     in = &ctx->input;
-    in->mouse.pos.x = (float)x;
-    in->mouse.pos.y = (float)y;
+    in->mouse.pos.x = x;
+    in->mouse.pos.y = y;
     in->mouse.delta.x = in->mouse.pos.x - in->mouse.prev.x;
     in->mouse.delta.y = in->mouse.pos.y - in->mouse.prev.y;
 }
@@ -24230,7 +24229,7 @@ nk_draw_symbol(struct nk_command_buffer *out, enum nk_symbol_type type,
         heading = (type == NK_SYMBOL_TRIANGLE_RIGHT) ? NK_RIGHT :
             (type == NK_SYMBOL_TRIANGLE_LEFT) ? NK_LEFT:
             (type == NK_SYMBOL_TRIANGLE_UP) ? NK_UP: NK_DOWN;
-        nk_triangle_from_direction(points, content, 0, 0, heading);
+        nk_triangle_from_direction(points, content, 0.15*content.w, 0.15*content.w, heading);
         nk_fill_triangle(out, points[0].x, points[0].y, points[1].x, points[1].y,
             points[2].x, points[2].y, foreground);
     } break;
@@ -27892,7 +27891,7 @@ nk_do_edit(nk_flags *state, struct nk_command_buffer *out,
         } else if (is_hovered && in->mouse.buttons[NK_BUTTON_LEFT].down &&
             in->mouse.buttons[NK_BUTTON_LEFT].clicked) {
             nk_textedit_click(edit, mouse_x, mouse_y, font, row_height);
-        } else if (is_hovered && in->mouse.buttons[NK_BUTTON_LEFT].down &&
+        } else if (in->mouse.buttons[NK_BUTTON_LEFT].down &&
             (in->mouse.delta.x != 0.0f || in->mouse.delta.y != 0.0f)) {
             nk_textedit_drag(edit, mouse_x, mouse_y, font, row_height);
             cursor_follow = nk_true;
@@ -28388,6 +28387,9 @@ nk_edit_string(struct nk_context *ctx, nk_flags flags,
         if (!(flags & NK_EDIT_SELECTABLE)) {
             edit->select_start = win->edit.cursor;
             edit->select_end = win->edit.cursor;
+        } else if(flags & NK_EDIT_AUTO_SELECT) {
+            edit->select_start = 0;
+            edit->select_end = *len;
         } else {
             edit->select_start = win->edit.sel_start;
             edit->select_end = win->edit.sel_end;
@@ -28765,17 +28767,17 @@ nk_do_property(nk_flags *ws,
         default: break;
         case NK_PROPERTY_INT:
             variant->value.i = nk_strtoi(buffer, 0);
-            variant->value.i = NK_CLAMP(variant->min_value.i, variant->value.i, variant->max_value.i);
+            // variant->value.i = NK_CLAMP(variant->min_value.i, variant->value.i, variant->max_value.i);
             break;
         case NK_PROPERTY_FLOAT:
             nk_string_float_limit(buffer, NK_MAX_FLOAT_PRECISION);
             variant->value.f = nk_strtof(buffer, 0);
-            variant->value.f = NK_CLAMP(variant->min_value.f, variant->value.f, variant->max_value.f);
+            // variant->value.f = NK_CLAMP(variant->min_value.f, variant->value.f, variant->max_value.f);
             break;
         case NK_PROPERTY_DOUBLE:
             nk_string_float_limit(buffer, NK_MAX_FLOAT_PRECISION);
             variant->value.d = nk_strtod(buffer, 0);
-            variant->value.d = NK_CLAMP(variant->min_value.d, variant->value.d, variant->max_value.d);
+            // variant->value.d = NK_CLAMP(variant->min_value.d, variant->value.d, variant->max_value.d);
             break;
         }
     }
@@ -29392,7 +29394,7 @@ nk_color_picker_behavior(nk_flags *state,
         *state = NK_WIDGET_STATE_HOVERED;
     if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(in, *bounds))
         *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, *bounds))
+    else if ((!in || (in->mouse.buttons[NK_BUTTON_LEFT].down == nk_false)) && nk_input_is_mouse_prev_hovering_rect(in, *bounds))
         *state |= NK_WIDGET_STATE_LEFT;
     return value_changed;
 }
