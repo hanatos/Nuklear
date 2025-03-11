@@ -139,6 +139,8 @@ nk_tree_base(struct nk_context *ctx, enum nk_tree_type type,
         state = nk_add_value(ctx, win, tree_hash, 0);
         *state = initial_state;
     }
+    if(initial_state == NK_FORCE_MINIMIZED) *state = NK_MINIMIZED;
+    if(initial_state == NK_FORCE_MAXIMIZED) *state = NK_MAXIMIZED;
     return nk_tree_state_base(ctx, type, img, title, (enum nk_collapse_states*)state);
 }
 NK_API nk_bool
