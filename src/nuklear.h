@@ -3271,6 +3271,9 @@ NK_API float nk_propertyf(struct nk_context*, const char *name, float min, float
 /// Returns the new modified double value
 */
 NK_API double nk_propertyd(struct nk_context*, const char *name, double min, double val, double max, double step, float inc_per_pixel);
+NK_API void nk_property_focus(struct nk_context *ctx);
+NK_API int nk_property_int_unfocus(struct nk_context *ctx, const char *name, int min, int *val, int max, int step, int keypress);
+NK_API int nk_property_float_unfocus(struct nk_context *ctx, const char *name, float min, float *val, float max, float step, int keypress);
 /* =============================================================================
  *
  *                                  TEXT EDIT
@@ -4527,6 +4530,7 @@ struct nk_keyboard {
 struct nk_input {
     struct nk_keyboard keyboard;
     struct nk_mouse mouse;
+    int focus_next;
 };
 
 NK_API nk_bool nk_input_has_mouse_click(const struct nk_input*, enum nk_buttons);
@@ -5587,7 +5591,7 @@ struct nk_context {
 #define NK_PI 3.141592654f
 #define NK_PI_HALF 1.570796326f
 #define NK_UTF_INVALID 0xFFFD
-#define NK_MAX_FLOAT_PRECISION 2
+#define NK_MAX_FLOAT_PRECISION 4
 
 #define NK_UNUSED(x) ((void)(x))
 #define NK_SATURATE(x) (NK_MAX(0, NK_MIN(1.0f, x)))

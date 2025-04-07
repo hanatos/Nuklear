@@ -53,7 +53,13 @@ nk_property_behavior(nk_flags *ws, const struct nk_input *in,
 {
     nk_widget_state_reset(ws);
     if (in && *state == NK_PROPERTY_DEFAULT) {
-        if (nk_button_behavior(ws, edit, in, NK_BUTTON_DEFAULT))
+        if(in->focus_next)
+        {
+          ((struct nk_input *)in)->focus_next = 0;
+          *state = NK_PROPERTY_EDIT;
+          *ws = NK_WIDGET_STATE_ACTIVE;
+        }
+        else if (nk_button_behavior(ws, edit, in, NK_BUTTON_DEFAULT))
             *state = NK_PROPERTY_EDIT;
         else if (nk_input_is_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, label, nk_true))
             *state = NK_PROPERTY_DRAG;
@@ -258,8 +264,8 @@ nk_do_property(nk_flags *ws,
     if (!old && (*state == NK_PROPERTY_EDIT)) {
         /* property has been activated so setup buffer */
         NK_MEMCPY(buffer, dst, (nk_size)*length);
-        *cursor = nk_utf_len(buffer, *length);
-        *len = *length;
+        *select_begin = *cursor = 0;
+        *select_end = *len = *length;
         length = len;
         dst = buffer;
         active = 0;
@@ -293,6 +299,62 @@ nk_do_property(nk_flags *ws,
         nk_property_save(variant, buffer, *len);
     }
 }
+NK_API void
+nk_property_focus(struct nk_context *ctx)
+{ // do this *before* calling property, put focus_next flag on input
+  ctx->input.focus_next = 1;
+}
+NK_API int
+nk_property_float_unfocus(struct nk_context *ctx, const char *name, float min, float *val, float max, float step, int keypress)
+{ // do this *after* calling property
+  struct nk_property_variant variant = nk_property_variant_float(*val, min, max, step);
+  if(keypress)
+  {
+    nk_hash hash = 0;
+    /* calculate hash from name */
+    if (name[0] == '#') {
+      hash = nk_murmur_hash(name, (int)nk_strlen(name), ctx->current->property.seq-1);
+      name++; /* special number hash */
+    } else hash = nk_murmur_hash(name, (int)nk_strlen(name), 42);
+    int hot = ctx->current->property.active &&
+      (ctx->current->property.state == NK_PROPERTY_EDIT) &&
+      (hash == ctx->current->property.name);
+    if (hot)
+    {
+      ctx->current->property.state = NK_PROPERTY_DEFAULT;
+      nk_property_save(&variant, ctx->current->property.buffer, ctx->current->property.length);
+      *val = variant.value.f;
+      return 1;
+    }
+  }
+  return 0;
+}
+NK_API int
+nk_property_int_unfocus(struct nk_context *ctx, const char *name, int min, int *val, int max, int step, int keypress)
+{ // do this *after* calling property
+  struct nk_property_variant variant = nk_property_variant_int(*val, min, max, step);
+  if(keypress)
+  {
+    nk_hash hash = 0;
+    /* calculate hash from name */
+    if (name[0] == '#') {
+      hash = nk_murmur_hash(name, (int)nk_strlen(name), ctx->current->property.seq-1);
+      name++; /* special number hash */
+    } else hash = nk_murmur_hash(name, (int)nk_strlen(name), 42);
+    int hot = ctx->current->property.active &&
+      (ctx->current->property.state == NK_PROPERTY_EDIT) &&
+      (hash == ctx->current->property.name);
+    if (hot)
+    {
+      ctx->current->property.state = NK_PROPERTY_DEFAULT;
+      nk_property_save(&variant, ctx->current->property.buffer, ctx->current->property.length);
+      *val = variant.value.i;
+      return 1;
+    }
+  }
+  return 0;
+}
+
 NK_LIB struct nk_property_variant
 nk_property_variant_int(int value, int min_value, int max_value, int step)
 {

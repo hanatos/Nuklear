@@ -490,7 +490,7 @@ enum nk_heading         {NK_UP, NK_RIGHT, NK_DOWN, NK_LEFT};
 enum nk_button_behavior {NK_BUTTON_DEFAULT, NK_BUTTON_REPEATER};
 enum nk_modify          {NK_FIXED = nk_false, NK_MODIFIABLE = nk_true};
 enum nk_orientation     {NK_VERTICAL, NK_HORIZONTAL};
-enum nk_collapse_states {NK_MINIMIZED = nk_false, NK_MAXIMIZED = nk_true};
+enum nk_collapse_states {NK_MINIMIZED = nk_false, NK_MAXIMIZED = nk_true, NK_FORCE_MINIMIZED = 2, NK_FORCE_MAXIMIZED = 3};
 enum nk_show_states     {NK_HIDDEN = nk_false, NK_SHOWN = nk_true};
 enum nk_chart_type      {NK_CHART_LINES, NK_CHART_COLUMN, NK_CHART_MAX};
 enum nk_chart_event     {NK_CHART_HOVERING = 0x01, NK_CHART_CLICKED = 0x02};
@@ -3493,6 +3493,9 @@ NK_API float nk_propertyf(struct nk_context*, const char *name, float min, float
 /// Returns the new modified double value
 */
 NK_API double nk_propertyd(struct nk_context*, const char *name, double min, double val, double max, double step, float inc_per_pixel);
+NK_API void nk_property_focus(struct nk_context *ctx);
+NK_API int nk_property_int_unfocus(struct nk_context *ctx, const char *name, int min, int *val, int max, int step, int keypress);
+NK_API int nk_property_float_unfocus(struct nk_context *ctx, const char *name, float min, float *val, float max, float step, int keypress);
 /* =============================================================================
  *
  *                                  TEXT EDIT
@@ -4749,6 +4752,7 @@ struct nk_keyboard {
 struct nk_input {
     struct nk_keyboard keyboard;
     struct nk_mouse mouse;
+    int focus_next;
 };
 
 NK_API nk_bool nk_input_has_mouse_click(const struct nk_input*, enum nk_buttons);
@@ -5809,7 +5813,7 @@ struct nk_context {
 #define NK_PI 3.141592654f
 #define NK_PI_HALF 1.570796326f
 #define NK_UTF_INVALID 0xFFFD
-#define NK_MAX_FLOAT_PRECISION 2
+#define NK_MAX_FLOAT_PRECISION 4
 
 #define NK_UNUSED(x) ((void)(x))
 #define NK_SATURATE(x) (NK_MAX(0, NK_MIN(1.0f, x)))
@@ -6001,11 +6005,13 @@ NK_LIB nk_uint nk_round_up_pow2(nk_uint v);
 NK_LIB struct nk_rect nk_shrink_rect(struct nk_rect r, float amount);
 NK_LIB struct nk_rect nk_pad_rect(struct nk_rect r, struct nk_vec2 pad);
 NK_LIB void nk_unify(struct nk_rect *clip, const struct nk_rect *a, float x0, float y0, float x1, float y1);
+#ifndef NK_DTOA
 NK_LIB double nk_pow(double x, int n);
 NK_LIB int nk_ifloord(double x);
+NK_LIB int nk_log10(double n);
+#endif
 NK_LIB int nk_ifloorf(float x);
 NK_LIB int nk_iceilf(float x);
-NK_LIB int nk_log10(double n);
 NK_LIB float nk_roundf(float x);
 
 /* util */
@@ -6409,6 +6415,7 @@ nk_round_up_pow2(nk_uint v)
     v++;
     return v;
 }
+#ifndef NK_DTOA
 NK_LIB double
 nk_pow(double x, int n)
 {
@@ -6430,6 +6437,7 @@ nk_ifloord(double x)
     x = (double)((int)x - ((x < 0.0) ? 1 : 0));
     return (int)x;
 }
+#endif
 NK_LIB int
 nk_ifloorf(float x)
 {
@@ -6448,6 +6456,7 @@ nk_iceilf(float x)
         return (r > 0.0f) ? t+1: t;
     }
 }
+#ifndef NK_DTOA
 NK_LIB int
 nk_log10(double n)
 {
@@ -6464,6 +6473,7 @@ nk_log10(double n)
     if (neg) exp = -exp;
     return exp;
 }
+#endif
 NK_LIB float
 nk_roundf(float x)
 {
@@ -9599,7 +9609,7 @@ nk_draw_text(struct nk_command_buffer *b, struct nk_rect r,
         length = nk_text_clamp(font, string, length, r.w, &glyphs, &txt_width, 0,0);
     }
 
-    if (!length) return;
+    if (length <= 0) return;
     cmd = (struct nk_command_text*)
         nk_command_buffer_push(b, NK_COMMAND_TEXT, sizeof(*cmd) + (nk_size)(length + 1));
     if (!cmd) return;
@@ -22752,6 +22762,8 @@ nk_tree_base(struct nk_context *ctx, enum nk_tree_type type,
         state = nk_add_value(ctx, win, tree_hash, 0);
         *state = initial_state;
     }
+    if(initial_state == NK_FORCE_MINIMIZED) *state = NK_MINIMIZED;
+    if(initial_state == NK_FORCE_MAXIMIZED) *state = NK_MAXIMIZED;
     return nk_tree_state_base(ctx, type, img, title, (enum nk_collapse_states*)state);
 }
 NK_API nk_bool
@@ -23685,9 +23697,9 @@ nk_widget_text(struct nk_command_buffer *o, struct nk_rect b,
     } else return;
 
     /* align in y-axis */
-    if (a & NK_TEXT_ALIGN_MIDDLE) {
-        label.y = b.y + b.h/2.0f - (float)f->height/2.0f;
-        label.h = NK_MAX(b.h/2.0f, b.h - (b.h/2.0f + f->height/2.0f));
+    if (a & NK_TEXT_ALIGN_MIDDLE) { /* add 0.5 for rounding and 1.0 to err on the high side (optical middle) */
+        label.y = (int)(b.y + b.h/2.0f - (float)(f->height+3)/2.0f);
+        label.h = NK_MAX(b.h/2.0f, b.h - (b.h/2.0f + (f->height+1)/2.0f));
     } else if (a & NK_TEXT_ALIGN_BOTTOM) {
         label.y = b.y + b.h - f->height;
         label.h = f->height;
@@ -25955,8 +25967,13 @@ nk_knob_behavior(nk_flags *state, struct nk_input *in,
         /* convert -pi -> pi range to 0.0 -> 1.0 */
         angle = (angle + NK_PI) / (NK_PI * 2);
 
-        /* click to closest step */
-        knob_value = knob_min + ( (int)(angle * knob_steps + (knob_step / 2)) ) * knob_step;
+        float dx = in->mouse.pos.x - origin.x, dy = in->mouse.pos.y - origin.y;
+        if(dx*dx+dy*dy < bounds.w*bounds.w * 25.0)
+        { /* click to closest step only if mouse pointer is close */
+          if(dx*dx+dy*dy > bounds.w*bounds.w)
+            knob_value = knob_min + ( (int)(angle * knob_steps + (knob_step / 2)) ) * knob_step;
+        }
+        else knob_value = knob_min + ( angle * knob_steps + (knob_step / 2.0f) ) * knob_step;
         knob_value = NK_CLAMP(knob_min, knob_value, knob_max);
     }
 
@@ -28551,7 +28568,13 @@ nk_property_behavior(nk_flags *ws, const struct nk_input *in,
 {
     nk_widget_state_reset(ws);
     if (in && *state == NK_PROPERTY_DEFAULT) {
-        if (nk_button_behavior(ws, edit, in, NK_BUTTON_DEFAULT))
+        if(in->focus_next)
+        {
+          ((struct nk_input *)in)->focus_next = 0;
+          *state = NK_PROPERTY_EDIT;
+          *ws = NK_WIDGET_STATE_ACTIVE;
+        }
+        else if (nk_button_behavior(ws, edit, in, NK_BUTTON_DEFAULT))
             *state = NK_PROPERTY_EDIT;
         else if (nk_input_is_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, label, nk_true))
             *state = NK_PROPERTY_DRAG;
@@ -28756,8 +28779,8 @@ nk_do_property(nk_flags *ws,
     if (!old && (*state == NK_PROPERTY_EDIT)) {
         /* property has been activated so setup buffer */
         NK_MEMCPY(buffer, dst, (nk_size)*length);
-        *cursor = nk_utf_len(buffer, *length);
-        *len = *length;
+        *select_begin = *cursor = 0;
+        *select_end = *len = *length;
         length = len;
         dst = buffer;
         active = 0;
@@ -28791,6 +28814,62 @@ nk_do_property(nk_flags *ws,
         nk_property_save(variant, buffer, *len);
     }
 }
+NK_API void
+nk_property_focus(struct nk_context *ctx)
+{ // do this *before* calling property, put focus_next flag on input
+  ctx->input.focus_next = 1;
+}
+NK_API int
+nk_property_float_unfocus(struct nk_context *ctx, const char *name, float min, float *val, float max, float step, int keypress)
+{ // do this *after* calling property
+  struct nk_property_variant variant = nk_property_variant_float(*val, min, max, step);
+  if(keypress)
+  {
+    nk_hash hash = 0;
+    /* calculate hash from name */
+    if (name[0] == '#') {
+      hash = nk_murmur_hash(name, (int)nk_strlen(name), ctx->current->property.seq-1);
+      name++; /* special number hash */
+    } else hash = nk_murmur_hash(name, (int)nk_strlen(name), 42);
+    int hot = ctx->current->property.active &&
+      (ctx->current->property.state == NK_PROPERTY_EDIT) &&
+      (hash == ctx->current->property.name);
+    if (hot)
+    {
+      ctx->current->property.state = NK_PROPERTY_DEFAULT;
+      nk_property_save(&variant, ctx->current->property.buffer, ctx->current->property.length);
+      *val = variant.value.f;
+      return 1;
+    }
+  }
+  return 0;
+}
+NK_API int
+nk_property_int_unfocus(struct nk_context *ctx, const char *name, int min, int *val, int max, int step, int keypress)
+{ // do this *after* calling property
+  struct nk_property_variant variant = nk_property_variant_int(*val, min, max, step);
+  if(keypress)
+  {
+    nk_hash hash = 0;
+    /* calculate hash from name */
+    if (name[0] == '#') {
+      hash = nk_murmur_hash(name, (int)nk_strlen(name), ctx->current->property.seq-1);
+      name++; /* special number hash */
+    } else hash = nk_murmur_hash(name, (int)nk_strlen(name), 42);
+    int hot = ctx->current->property.active &&
+      (ctx->current->property.state == NK_PROPERTY_EDIT) &&
+      (hash == ctx->current->property.name);
+    if (hot)
+    {
+      ctx->current->property.state = NK_PROPERTY_DEFAULT;
+      nk_property_save(&variant, ctx->current->property.buffer, ctx->current->property.length);
+      *val = variant.value.i;
+      return 1;
+    }
+  }
+  return 0;
+}
+
 NK_LIB struct nk_property_variant
 nk_property_variant_int(int value, int min_value, int max_value, int step)
 {
