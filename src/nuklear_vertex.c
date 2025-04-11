@@ -147,6 +147,7 @@ nk_draw_list_push_command(struct nk_draw_list *list, struct nk_rect clip,
         list->cmd_offset = (nk_size)(memory - (nk_byte*)cmd);
     }
 
+    cmd->strength = 0;
     cmd->elem_count = 0;
     cmd->clip_rect = clip;
     cmd->texture = texture;
@@ -1146,6 +1147,8 @@ nk_draw_list_add_text(struct nk_draw_list *list, const struct nk_user_font *font
         list->clip_rect.x, list->clip_rect.y, list->clip_rect.w, list->clip_rect.h)) return;
 
     nk_draw_list_push_image(list, font->texture);
+    struct nk_draw_command *cmd = nk_draw_list_command_last(list);
+    cmd->strength = 0.5f; // XXX read from nk_user_font?
     x = rect.x;
     glyph_len = nk_utf_decode(text, &unicode, len);
     if (!glyph_len) return;
@@ -1167,7 +1170,7 @@ nk_draw_list_add_text(struct nk_draw_list *list, const struct nk_user_font *font
         gy = rect.y + g.offset.y;
         gw = g.width; gh = g.height;
         char_width = g.xadvance;
-        nk_draw_list_push_rect_uv(list, nk_vec2(gx,gy), nk_vec2(gx + gw, gy+ gh),
+        nk_draw_list_push_rect_uv(list, nk_vec2(gx, gy), nk_vec2(gx + gw, gy + gh),
             g.uv[0], g.uv[1], fg);
 
         /* offset next glyph */

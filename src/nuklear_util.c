@@ -983,6 +983,7 @@ nk_murmur_hash(const void * key, int len, nk_hash seed)
     return h1;
 }
 #ifdef NK_INCLUDE_STANDARD_IO
+#ifdef NK_INCLUDE_FONT_BAKING
 NK_LIB char*
 nk_file_load(const char* path, nk_size* siz, const struct nk_allocator *alloc)
 {
@@ -1016,6 +1017,7 @@ nk_file_load(const char* path, nk_size* siz, const struct nk_allocator *alloc)
     fclose(fd);
     return buf;
 }
+#endif
 #endif
 NK_LIB int
 nk_text_clamp(const struct nk_user_font *font, const char *text,

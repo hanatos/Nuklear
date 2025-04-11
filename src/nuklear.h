@@ -4627,6 +4627,7 @@ struct nk_draw_vertex_layout_element {
 struct nk_draw_command {
     unsigned int elem_count;
     /* number of elements in the current draw batch */
+    float strength; /* for font rendering */
     struct nk_rect clip_rect;
     /* current screen clipping rectangle */
     nk_handle texture;
